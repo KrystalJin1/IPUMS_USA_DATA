@@ -1,0 +1,98 @@
+---
+title: "Reflection 4"
+author: Jin Zhang
+format: pdf
+editor: visual
+---
+
+```{r}
+#| warning: false
+#| message: false
+#| echo: false
+
+library(haven)
+library(labelled)
+library(dplyr)
+library(tidyverse)
+
+ipums_extract <- read_csv("usa_00004.csv")
+
+# Select specified columns and convert them to factors
+ipums_extract <- 
+  ipums_extract |>
+  select(STATEICP, EDUCD) |>
+  to_factor()
+
+
+```
+
+The number of the respondents in each state (STATEICP) that had a doctoral degree as their highest educational attainment (EDUC):
+
+```{r}
+#| warning: false
+#| message: false
+#| echo: false
+doctoral_counts <- ipums_extract |>
+  filter(EDUCD == 116) |>  # Filter rows with "Doctoral degree"
+  group_by(STATEICP) |>
+  summarise(doctoral_count = n()) |>  
+  # Count respondents with a doctoral degree in each state
+  ungroup()
+doctoral_counts
+```
+
+# Obtain the data.
+
+To access the data from IPUMS USA, we initiated the process by navigating to the IPUMS website and selecting “IPUMS USA.” We proceeded by clicking “Get Data” and chose the “2022 ACS” under “SELECT SAMPLE.” For state-level data, we selected “HOUSEHOLD” then “GEOGRAPHIC” and added “STATEICP” to our cart. For data on individuals, we clicked on the “PERSON” category and added “EDUC” to our selection. We reviewed our choices by clicking on “VIEW CART” followed by “CREATE DATA EXTRACT.” We altered the “DATA FORMAT” to “.dta” and submitted the extract. After either logging in or signing up, we were notified via email once the extract was prepared. We downloaded the file, named “usa_00004.dta,” and saved it on our local machine for analysis in R.
+
+# Ratio estimators approach.
+
+The ratio estimation method is a statistical technique that uses ratios derived from a sample to calculate a population total or average. This method involves determining the ratio of a particular attribute (e.g., the number of people with doctoral degrees) to the overall population of a known group (e.g., the State of California). This ratio is then used to estimate the total number of people in other groups, assuming a similar pattern exists in the population in general.
+
+# Estimates and the actual number of respondents.
+
+```{r}
+#| warning: false
+#| message: false
+#| echo: false
+# Get the total number of respondents in California
+total_respondents_california <- 391171  
+
+# Get the number of respondents with a doctoral degree in California
+doctoral_respondents_california <- doctoral_counts |>
+  filter(STATEICP == "71") |>
+  pull(doctoral_count)
+
+# Calculate the ratio of doctoral degree holders to total respondents in California
+doctoral_ratio_california <- doctoral_respondents_california / total_respondents_california
+
+# Get the total count of respondents in each state using the ratio estimator
+estimated_total_counts <- doctoral_counts |>
+  mutate(estimated_total = doctoral_count / doctoral_ratio_california)
+
+# Merge the estimated totals with actual respondent counts
+actual_counts <- ipums_extract |>
+  group_by(STATEICP) |>
+  summarise(actual_total = n()) |>  # Count actual number of respondents in each state
+  ungroup()
+
+comparison <- doctoral_counts |>
+  left_join(actual_counts, by = "STATEICP") |>
+  left_join(estimated_total_counts, by = "STATEICP") |>
+  select(STATEICP, actual_total, estimated_total)
+
+# Display the comparison between actual and estimated counts
+comparison
+```
+
+# Some explanation of why you think they are different.
+
+The estimated total number of respondents in each state using the ratio estimators approach might differ from the actual numbers for these reasons:
+
+1.  Diverse Populations: Different states have their own unique demographic and educational characteristics. A ratio calculated from one state, such as California, may not be accurate in the other states with different characteristics.
+
+2.  Sampling Errors: The ratio is derived from a sample of the population rather than the entire true population. This can introduce errors because the sample might not perfectly represent the larger group.
+
+3.  Non-Representative Samples: If the sample used to calculate the ratio comes from a state that is not typical of other states, the ratio might not be suitable for estimating numbers in other states.
+
+4.  Uniformity Assumption: This method assumes that the conditions in one state are similar to those in others, which often is not the case. Differences in education systems, economies, and cultures can make this assumption incorrect.
